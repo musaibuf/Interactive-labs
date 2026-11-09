@@ -1,0 +1,16 @@
+# dependencies
+node_modules/
+
+# env files (passwords and API keys, never commit)
+.env
+.env.*
+
+# logs
+*.log
+npm-debug.log*
+
+# editor and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
