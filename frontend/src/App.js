@@ -81,6 +81,7 @@ const STEP_META = {
 
 const qs = new URLSearchParams(window.location.search);
 const VIEW = (qs.get('view') || 'participant').toLowerCase();
+const SCREEN_LIGHT = qs.get('theme') === 'light';
 
 const store = {
   get(k) { try { return window.localStorage.getItem(k); } catch (e) { return null; } },
@@ -478,7 +479,6 @@ function JoinForm({ code, onJoined, onBadCode }) {
   const [err, setErr] = useState('');
   const [name, setName] = useState('');
   const [table, setTable] = useState('');
-  const [email, setEmail] = useState('');
   const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -490,7 +490,7 @@ function JoinForm({ code, onJoined, onBadCode }) {
     e.preventDefault();
     setBusy(true); setErr('');
     try {
-      const res = await api('/api/join', { method: 'POST', body: { code, name: name.trim(), tableNumber: Number(table), email: email.trim() || null, consent } });
+      const res = await api('/api/join', { method: 'POST', body: { code, name: name.trim(), tableNumber: Number(table), consent } });
       onJoined(res.token);
     } catch (e2) { setErr(e2.message); }
     setBusy(false);
@@ -520,9 +520,6 @@ function JoinForm({ code, onJoined, onBadCode }) {
               <option value="">Select your table</option>
               {Array.from({ length: info.tableCount || 7 }, (_, i) => i + 1).map((n) => <option key={n} value={n}>Table {n}</option>)}
             </select>
-          </label>
-          <label>Work email <span className="muted">(optional, used only to send your report)</span>
-            <input className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
           </label>
           <label className="check">
             <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
@@ -933,7 +930,7 @@ function ScreenLive({ code }) {
   const meta = STEP_META[step.key] || {};
 
   return (
-    <div className="screen">
+    <div className={`screen ${SCREEN_LIGHT ? 'light' : ''}`}>
       <header className="s-top">
         <Logos dark />
         <div className="s-title">
@@ -1229,8 +1226,8 @@ function SessionList({ token, onOpen, onLogout }) {
 
   return (
     <div className="c-page">
-      <header className="c-top">
-        <Logos /><div className="c-title">Interactive Labs | Sessions</div>
+      <header className="c-top dark">
+        <Logos dark /><div className="c-title">Interactive Labs | Sessions</div>
         <button className="btn ghost sm" onClick={onLogout}><LogOut size={14} /> Sign out</button>
       </header>
       <div className="c-grid2">
@@ -1250,7 +1247,7 @@ function SessionList({ token, onOpen, onLogout }) {
         </div>
         <div className="card">
           <h3>Sessions</h3>
-          {!list ? <Waiting spin title="Loading" /> : list.length === 0 ? <p className="muted">No sessions yet.</p> : (
+          {!list ? (err ? <div className="error">{err}</div> : <Waiting spin title="Loading" />) : list.length === 0 ? <p className="muted">No sessions yet.</p> : (
             <table className="t">
               <thead><tr><th>Code</th><th>Client</th><th>Date</th><th>Joined</th><th /></tr></thead>
               <tbody>
@@ -1325,11 +1322,11 @@ function ConsoleLive({ token, code, onBack, onLogout }) {
         </div>
         <div className="c-timer">
           <Countdown timer={timer} offsetRef={offsetRef} className="lg" />
-          {timer && (timer.running
-            ? <button className="btn ghost sm" onClick={() => fac('timerPause')}><Pause size={14} /> Pause</button>
-            : <button className="btn sm" onClick={() => fac('timerStart')}><Play size={14} /> Start</button>)}
-          {timer && <button className="btn ghost sm" onClick={() => fac('timerAdd', { ms: 30000 })}><Plus size={14} /> 30s</button>}
-          {timer && <button className="btn ghost sm" onClick={() => fac('timerEnd')}><Square size={14} /> End now</button>}
+          {timer && timer.running && <button className="btn ghost sm" onClick={() => fac('timerPause')}><Pause size={14} /> Pause</button>}
+          {timer && !timer.running && timer.remainingMs > 0 && <button className="btn sm" onClick={() => fac('timerStart')}><Play size={14} /> Resume</button>}
+          {timer && (timer.running || timer.remainingMs > 0) && <button className="btn ghost sm" onClick={() => fac('timerAdd', { ms: 30000 })}><Plus size={14} /> 30s</button>}
+          {timer && (timer.running || timer.remainingMs > 0) && <button className="btn ghost sm" onClick={() => fac('timerEnd')}><Square size={14} /> End now</button>}
+          {timer && !timer.running && timer.remainingMs === 0 && <span className="badge ok"><Lock size={12} /> Time ended</span>}
         </div>
       </div>
 
@@ -1715,7 +1712,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:18px}
 .card.flat{background:#F9FAFB}
 .card.narrow{width:100%;max-width:400px}
-.input{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;outline:none}
+.input{width:100%;padding:11px 12px;border:1px solid #D0D5DD;border-radius:10px;background:#FCFCFD;outline:none}
 .input:focus{border-color:var(--ink);box-shadow:0 0 0 3px rgba(40,37,71,.08)}
 .input.sm{padding:6px 8px;font-size:13px;width:auto;min-width:120px}
 .input.code{text-align:center;letter-spacing:.3em;font-size:24px;font-weight:700;margin:10px 0}
@@ -1740,8 +1737,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 .logos img{height:30px;width:auto;object-fit:contain}
 .card>.logos{justify-content:center;margin:2px 0 12px}
 .card>.logos img{height:58px}
-.card>.h1,.card>.kicker,.card>.muted{text-align:center;justify-content:center}
-.logos.dark{background:#fff;padding:6px 12px;border-radius:10px}
+.card>.h1,.card>.kicker,.card.narrow>.muted{text-align:center;justify-content:center}
 .logos.dark img{height:34px}
 
 .waiting{display:flex;flex-direction:column;align-items:center;text-align:center;padding:36px 12px;gap:6px}
@@ -1770,11 +1766,13 @@ button,input,select,textarea{font:inherit;color:inherit}
 
 /* participant */
 .p-shell{min-height:100vh}
-.p-top{position:sticky;top:0;z-index:10;background:var(--orange);color:var(--ink);border-bottom:4px solid var(--ink);display:flex;align-items:center;justify-content:space-between;padding:10px 14px;gap:10px}
+.p-top{position:sticky;top:0;z-index:10;background:var(--ink);color:#fff;border-bottom:3px solid var(--orange);display:flex;align-items:center;justify-content:space-between;padding:10px 14px;gap:10px}
 .p-name{font-weight:700;display:flex;align-items:center;font-size:15px}
-.p-sub{font-size:12px;color:rgba(40,37,71,.78)}
+.p-sub{font-size:12px;color:rgba(255,255,255,.7)}
+.p-top .countdown{background:rgba(255,255,255,.14)}
+.p-top .countdown.low{background:var(--accent)}
 .p-right{display:flex;align-items:center;gap:8px}
-.pts{display:inline-flex;align-items:center;gap:4px;font-weight:700;font-size:13px;color:var(--ink)}
+.pts{display:inline-flex;align-items:center;gap:4px;font-weight:700;font-size:13px;color:#FFB066}
 .p-wrap{max-width:560px;margin:0 auto;padding:16px 14px 90px}
 .p-wrap.center{padding:16px}
 .step-head h2{font-size:18px}
@@ -1857,7 +1855,8 @@ button,input,select,textarea{font:inherit;color:inherit}
 .tile-l{font-size:11px;opacity:.85;margin-top:2px}
 .rep-sec h3{font-size:14px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink);margin-bottom:6px}
 .rep-sec.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-.profile{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.profile{display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap}
+.profile svg{display:block;margin:0 auto}
 .area-list{list-style:none;padding:0;margin:0;flex:1;min-width:160px}
 .area-list li{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px dashed var(--line);font-size:13px}
 .line{font-size:14px;margin-bottom:4px}
@@ -1873,11 +1872,13 @@ button,input,select,textarea{font:inherit;color:inherit}
 @media(max-width:420px){.compare,.rep-sec.two{grid-template-columns:1fr}}
 
 /* big screen */
-.screen{min-height:100vh;background:radial-gradient(1200px 600px at 80% -10%,#3A3566 0%,var(--ink) 55%);color:#fff;display:flex;flex-direction:column}
+.screen{min-height:100vh;background:radial-gradient(1200px 600px at 80% -10%,#36325E 0%,#1E1C38 60%);color:#fff;display:flex;flex-direction:column}
 .screen .card{color:var(--text)}
-.s-top{display:flex;align-items:center;gap:24px;padding:16px 32px;background:var(--orange);color:var(--ink)}
+.s-top{display:flex;align-items:center;gap:24px;padding:16px 32px;background:var(--ink);color:#fff;border-bottom:4px solid var(--orange)}
+.s-top .countdown{background:rgba(255,255,255,.12)}
+.s-top .countdown.low{background:var(--accent)}
 .s-title{flex:1}
-.s-lab{font-size:15px;color:rgba(40,37,71,.75);font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+.s-lab{font-size:15px;color:#FFB066;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
 .s-step{font-size:28px;font-weight:800}
 .s-right{display:flex;align-items:center;gap:12px}
 .s-main{flex:1;padding:28px 32px;display:flex}
@@ -1938,24 +1939,46 @@ button,input,select,textarea{font:inherit;color:inherit}
 .ts.done{background:rgba(50,213,131,.18);color:#6CE9A6}
 .reveal{display:grid;grid-template-columns:1.1fr 1fr;gap:28px;align-items:start}
 .rv-left{display:flex;flex-direction:column;gap:10px}
-.cmp-t{width:100%;border-collapse:collapse;font-size:20px;background:rgba(255,255,255,.05);border-radius:14px;overflow:hidden}
+.cmp-t{width:100%;border-collapse:collapse;font-size:18px;background:rgba(255,255,255,.05);border-radius:14px;overflow:hidden}
 .cmp-t th{text-align:left;padding:10px 14px;font-size:14px;text-transform:uppercase;letter-spacing:.05em;color:#FFB066}
-.cmp-t td{padding:10px 14px;border-top:1px solid rgba(255,255,255,.08)}
+.cmp-t td{padding:7px 14px;border-top:1px solid rgba(255,255,255,.08)}
 .cmp-t td:nth-child(2),.cmp-t td:nth-child(3),.cmp-t th:nth-child(2),.cmp-t th:nth-child(3){text-align:center;width:90px;font-weight:800}
 .cmp-t tr.gap td{background:rgba(253,176,34,.22)}
 .cmp-t tr.tot td{font-weight:800;border-top:2px solid rgba(255,255,255,.2)}
-.rv-comments{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
-.rv-c{background:rgba(255,255,255,.06);border-radius:12px;padding:12px;font-size:17px}
+.rv-comments{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.rv-c{background:rgba(255,255,255,.06);border-radius:12px;padding:10px 12px;font-size:15px}
 .rv-c.ai{background:rgba(188,24,35,.18)}
-.calib{margin-top:14px}.calib-row{display:flex;gap:16px;flex-wrap:wrap;font-size:17px}
+.calib{margin-top:10px}.calib-row{display:flex;gap:16px;flex-wrap:wrap;font-size:17px}
 .showcase{position:fixed;inset:0;background:rgba(10,17,33,.92);display:flex;align-items:center;justify-content:center;padding:40px;z-index:40}
 .showcase-in{max-width:1100px;width:100%}
 
+/* big screen, light theme (?view=screen&code=XXXX&theme=light) for bright rooms */
+.screen.light{background:#F4F5F8;color:var(--ink)}
+.screen.light .s-p,.screen.light .pr-l,.screen.light .s-explain{color:#475467}
+.screen.light .kicker.light,.screen.light .accent-ic,.screen.light .lb-rank,.screen.light .tbl-h,.screen.light .cmp-t th{color:var(--accent)}
+.screen.light .qr-card,.screen.light .mail{box-shadow:0 10px 30px rgba(40,37,71,.08);border:1px solid var(--line)}
+.screen.light .tbl,.screen.light .chan-s,.screen.light .ts,.screen.light .lb-row,.screen.light .rv-c{background:#fff;border:1px solid var(--line)}
+.screen.light .tbl-h span{background:var(--accent-soft);color:var(--accent)}
+.screen.light .tbl-n{color:var(--text)}
+.screen.light .pr-track,.screen.light .lb-track{background:#E4E7EC}
+.screen.light .bar-track{background:#E9EBF0}
+.screen.light .lb-row.top{background:var(--accent-soft);border-color:#F4C7CA}
+.screen.light .ts.done{background:var(--ok-soft);color:var(--ok);border-color:#B7E4C7}
+.screen.light .cmp-t{background:#fff;border:1px solid var(--line)}
+.screen.light .cmp-t td{border-top:1px solid var(--line)}
+.screen.light .cmp-t tr.gap td{background:#FEF0C7}
+.screen.light .cmp-t tr.tot td{border-top:2px solid #D0D5DD}
+.screen.light .rv-c.ai{background:var(--accent-soft);border-color:#F4C7CA}
+.screen.light .explain{border:1px solid var(--line);box-shadow:0 10px 30px rgba(40,37,71,.08)}
+.screen.light .bar-tag{color:#053321}
+
 /* console */
 .c-page{min-height:100vh;background:var(--bg)}
-.c-top{display:flex;align-items:center;gap:10px;padding:12px 20px;background:var(--orange);color:var(--ink);flex-wrap:wrap}
+.c-top{display:flex;align-items:center;gap:10px;padding:12px 20px;background:var(--ink);color:#fff;border-bottom:3px solid var(--orange);flex-wrap:wrap}
+.c-top .btn.ghost{background:rgba(255,255,255,.08);color:#fff;border-color:rgba(255,255,255,.2)}
 .c-title{flex:1;font-weight:600;min-width:200px}
-.c-control{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:14px 20px;background:var(--ink);color:#fff;flex-wrap:wrap}
+.c-top.dark{background:var(--ink);color:#fff}
+.c-control{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:14px 20px;background:var(--ink2);color:#fff;flex-wrap:wrap}
 .c-step{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .c-step .btn.ghost{background:rgba(255,255,255,.08);color:#fff;border-color:rgba(255,255,255,.15)}
 .c-step-l .muted{color:#C9D0DE}

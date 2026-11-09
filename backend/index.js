@@ -1378,7 +1378,7 @@ const csvCell = (v) => { const s = v == null ? '' : String(v); return /[",\n]/.t
 const toCSV = (rows) => rows.map((r) => r.map(csvCell).join(',')).join('\n');
 
 function scoresCSV(S) {
-  const head = ['Name', 'Email', 'Table', 'Lab 1 points', 'Slip caught', 'Slip total', 'Channel %',
+  const head = ['Name', 'Table', 'Lab 1 points', 'Slip caught', 'Slip total', 'Channel %',
     'Email 1 scenario', 'Email 1 total', ...AREAS.map((a) => `E1 ${a.label}`), 'Email 2 scenario', 'Email 2 total', ...AREAS.map((a) => `E2 ${a.label}`),
     'Lab 2 average', ...AREAS.map((a) => `Avg ${a.label}`), 'Peer reviewed', 'Peer total', 'Report status'];
   const rows = Object.values(S.participants).sort((a, b) => a.tableNumber - b.tableNumber).map((p) => {
@@ -1394,7 +1394,7 @@ function scoresCSV(S) {
     Object.entries(S.review.selection).forEach(([t, eid]) => {
       if (es.some((e) => e && e.id === eid)) { reviewed = 'Yes'; const sub = S.review.submissions[t]; if (sub) peerTotal = AREA_KEYS.reduce((a, k) => a + sub.scores[k], 0); }
     });
-    return [p.name, p.email || '', p.tableNumber, st.points, st.caught, st.totalMistakes, st.channelPct, ...cell(es[0]), ...cell(es[1]),
+    return [p.name, p.tableNumber, st.points, st.caught, st.totalMistakes, st.channelPct, ...cell(es[0]), ...cell(es[1]),
       done.length ? round1(avg(done.map((e) => e.ai.result.total))) : '', ...AREA_KEYS.map((k) => (done.length ? round1(avg(done.map((e) => e.ai.result.scores[k]))) : '')),
       reviewed, peerTotal, reportStatus(S, p.id)];
   });
