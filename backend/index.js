@@ -1069,7 +1069,7 @@ function pushTo(sock, S) {
 
 /* ================================================================ PDF helpers */
 
-const NAVY = '#14213D'; const ACCENT = '#C2410C'; const ACCENT_L = '#F9B79A'; const MUTED = '#667085'; const LINE = '#E4E7EC';
+const NAVY = '#282547'; const ACCENT = '#BC1823'; const ACCENT_L = '#FFB066'; const ORANGE = '#FF7C00'; const MUTED = '#667085'; const LINE = '#E4E7EC';
 const SOFT = '#F4F5F8'; const OKSOFT = '#E7F6EC'; const TEXT = '#101828'; const PEERBG = '#FFF8EB';
 const asset = (f) => { const p = path.join(ASSETS, f); return fs.existsSync(p) ? p : null; };
 
@@ -1134,7 +1134,8 @@ function bullet(doc, text, x, y, w, h, size = 8.5) {
 function drawReport(doc, r) {
   const W = 595.28; const M = 36; const CW = W - 2 * M;
 
-  doc.rect(0, 0, W, 78).fill(NAVY);
+    doc.rect(0, 0, W, 78).fill(NAVY);
+  doc.rect(0, 0, W, 5).fill(ORANGE);
   doc.font('Helvetica-Bold').fontSize(7.5).fillColor(ACCENT_L).text('INTERACTIVE LABS: YOUR REPORT', M, 15, { characterSpacing: 1, lineBreak: false });
   doc.font('Helvetica-Bold').fontSize(18).fillColor('#FFFFFF').text(pdfSafe(r.name), M, 27, { width: CW - 200, height: 22, ellipsis: true });
   doc.font('Helvetica').fontSize(8.5).fillColor('#C9D0DE').text(pdfSafe(`Table ${r.tableNumber}  |  ${r.program}  |  ${r.date}  |  ${r.client}`), M, 52, { width: CW - 200, height: 12, ellipsis: true });
@@ -1288,7 +1289,8 @@ async function cohortPDF(S, refresh) {
     };
     const list = (items) => (items || []).forEach((t) => { need(24); const y = doc.y; bullet(doc, t, M, y, CW, 30, 9); doc.y = y + doc.heightOfString(pdfSafe(t), { width: CW - 9 }) + 5; });
 
-    doc.rect(0, 0, W, 92).fill(NAVY);
+        doc.rect(0, 0, W, 92).fill(NAVY);
+    doc.rect(0, 0, W, 5).fill(ORANGE);
     doc.font('Helvetica-Bold').fontSize(8).fillColor(ACCENT_L).text('INTERACTIVE LABS: COHORT REPORT', M, 20, { characterSpacing: 1 });
     doc.font('Helvetica-Bold').fontSize(20).fillColor('#FFFFFF').text(pdfSafe(S.client), M, 34, { width: CW - 200 });
     doc.font('Helvetica').fontSize(9).fillColor('#C9D0DE').text(pdfSafe(`${S.program}  |  ${S.date}  |  Session ${S.code}`), M, 62, { width: CW - 200 });
