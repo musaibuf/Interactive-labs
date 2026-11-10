@@ -537,6 +537,7 @@ async function claude(system, user, maxTokens = 2500) {
   if (!res.ok) throw new Error(`Claude API ${res.status}: ${(await res.text()).slice(0, 300)}`);
   const j = await res.json();
   if (j.usage) console.log(`[ai] in=${j.usage.input_tokens} out=${j.usage.output_tokens}`);
+  if (j.stop_reason === 'max_tokens') throw new Error('Claude response was cut off (max_tokens)');
   return (j.content || []).filter((b) => b.type === 'text').map((b) => b.text).join('');
 }
 function parseJSON(text) {
@@ -631,7 +632,7 @@ async function scoreEmailJob(S, emailId) {
   for (let attempt = 1; attempt <= 3; attempt++) {
     e.ai.attempts = (e.ai.attempts || 0) + 1;
     try {
-      const result = MOCK_AI ? mockScore(scn, e) : validateScore(parseJSON(await claude(scoringPrompt(S), scoringUser(scn, e), 2500)));
+      const result = MOCK_AI ? mockScore(scn, e) : validateScore(parseJSON(await claude(scoringPrompt(S), scoringUser(scn, e), 6000)));
       e.ai = { ...e.ai, status: 'done', result, original: JSON.parse(JSON.stringify(result.scores)), scoredAt: now(), error: null };
       touch(S);
       maybeQueueSummary(S, e.pid);
@@ -709,7 +710,7 @@ async function summaryJob(S, pid) {
   let lastErr = null;
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
-      const json = MOCK_AI ? mockSummary() : validateSummary(parseJSON(await claude(summaryPrompt(S), JSON.stringify(summaryInput(S, pid), null, 1), 1500)));
+      const json = MOCK_AI ? mockSummary() : validateSummary(parseJSON(await claude(summaryPrompt(S), JSON.stringify(summaryInput(S, pid), null, 1), 6000)));
       S.summaries[pid] = { status: 'done', json, at: now() };
       if (s.rerun) { S.summaries[pid].status = 'pending'; enqueue(() => summaryJob(S, pid)); }
       touch(S);
@@ -755,7 +756,7 @@ Each item at most 25 words.`;
     common_ai_fixes_sample: stats.fixSample,
   };
   try {
-    const o = parseJSON(await claude(sys, JSON.stringify(input, null, 1), 2000));
+    const o = parseJSON(await claude(sys, JSON.stringify(input, null, 1), 6000));
     S.cohort = {
       common_strengths: strArr(o.common_strengths, 3, 25), common_gaps: strArr(o.common_gaps, 3, 25),
       checkin_recommendations: strArr(o.checkin_recommendations, 3, 25), line_manager_recommendations: strArr(o.line_manager_recommendations, 3, 25),
@@ -1134,7 +1135,7 @@ function bullet(doc, text, x, y, w, h, size = 8.5) {
 function drawReport(doc, r) {
   const W = 595.28; const M = 36; const CW = W - 2 * M;
 
-    doc.rect(0, 0, W, 78).fill(NAVY);
+  doc.rect(0, 0, W, 78).fill(NAVY);
   doc.rect(0, 0, W, 5).fill(ORANGE);
   doc.font('Helvetica-Bold').fontSize(7.5).fillColor(ACCENT_L).text('INTERACTIVE LABS: YOUR REPORT', M, 15, { characterSpacing: 1, lineBreak: false });
   doc.font('Helvetica-Bold').fontSize(18).fillColor('#FFFFFF').text(pdfSafe(r.name), M, 27, { width: CW - 200, height: 22, ellipsis: true });
@@ -1289,7 +1290,7 @@ async function cohortPDF(S, refresh) {
     };
     const list = (items) => (items || []).forEach((t) => { need(24); const y = doc.y; bullet(doc, t, M, y, CW, 30, 9); doc.y = y + doc.heightOfString(pdfSafe(t), { width: CW - 9 }) + 5; });
 
-        doc.rect(0, 0, W, 92).fill(NAVY);
+    doc.rect(0, 0, W, 92).fill(NAVY);
     doc.rect(0, 0, W, 5).fill(ORANGE);
     doc.font('Helvetica-Bold').fontSize(8).fillColor(ACCENT_L).text('INTERACTIVE LABS: COHORT REPORT', M, 20, { characterSpacing: 1 });
     doc.font('Helvetica-Bold').fontSize(20).fillColor('#FFFFFF').text(pdfSafe(S.client), M, 34, { width: CW - 200 });
@@ -1538,7 +1539,7 @@ app.get('/api/report/:file', wrap(async (req, res) => {
   const buf = await reportPDF(S, pid);
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `${req.query.dl === '1' ? 'attachment' : 'inline'}; filename="Interactive-Labs-${p.name.replace(/[^\w]+/g, '-')}.pdf"`);
-    return res.send(buf);
+  return res.send(buf);
 }));
 
 app.get('/api/export/:code/:file', facAuth, wrap(async (req, res) => {
