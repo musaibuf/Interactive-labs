@@ -1537,8 +1537,8 @@ app.get('/api/report/:file', wrap(async (req, res) => {
   }
   const buf = await reportPDF(S, pid);
   res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', `inline; filename="Interactive-Labs-${p.name.replace(/[^\w]+/g, '-')}.pdf"`);
-  return res.send(buf);
+  res.setHeader('Content-Disposition', `${req.query.dl === '1' ? 'attachment' : 'inline'}; filename="Interactive-Labs-${p.name.replace(/[^\w]+/g, '-')}.pdf"`);
+    return res.send(buf);
 }));
 
 app.get('/api/export/:code/:file', facAuth, wrap(async (req, res) => {

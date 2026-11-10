@@ -450,8 +450,8 @@ function ReportView({ report, pdfUrl }) {
       )}
 
       <div className="rep-foot">We will revisit this at your 30-day check-in.</div>
-      {pdfUrl && <a className="btn accent block" href={pdfUrl} target="_blank" rel="noreferrer"><Download size={16} /> Download PDF</a>}
-    </div>
+      {pdfUrl && <a className="btn accent block" href={pdfUrl} download><Download size={16} /> Download PDF</a>}
+          </div>
   );
 }
 
@@ -563,8 +563,7 @@ function ParticipantLive({ code, token, onInvalid }) {
 
   const { me = {}, step = {}, data = {} } = state;
   const meta = STEP_META[step.key] || { lab: '', title: '' };
-  const pdfUrl = me.id ? `${API}/api/report/${me.id}.pdf?pt=${encodeURIComponent(token)}` : null;
-
+  const pdfUrl = me.id ? `${API}/api/report/${me.id}.pdf?pt=${encodeURIComponent(token)}&dl=1` : null;
   let body;
   switch (step.key) {
     case 'lobby':
