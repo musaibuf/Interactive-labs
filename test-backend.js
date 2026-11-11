@@ -178,6 +178,7 @@ async function waitFor(fn, ms, label) {
       info(`  Strengths: ${(r.strengths || []).join(' | ')}`);
       info(`  Next steps: ${(r.nextSteps || []).join(' | ')}`);
       if (/test mode/i.test(r.headline)) bad('Report summary is test mode, not Claude');
+      if ((r.nextSteps || [])[0] === 'Put your main request in the first two lines.') bad(`${p.name}: Claude summary failed, backup text used. Check Render logs for "[ai] summary attempt"`);
     }
     ok('Reports released to both phones');
 

@@ -40,11 +40,11 @@ const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString('he
 const API_KEY = process.env.ANTHROPIC_API_KEY || '';
 const MODEL = process.env.ANTHROPIC_MODEL || 'claude-sonnet-5-5';
 const MOCK_AI = process.env.MOCK_AI === 'true' || !API_KEY;
-const AI_CONCURRENCY = Number(process.env.AI_CONCURRENCY || 4);
+const AI_CONCURRENCY = Number(process.env.AI_CONCURRENCY || 6);
 const RETENTION_DAYS = Number(process.env.RETENTION_DAYS || 45);
 const CONTENT_SET_ID = process.env.CONTENT_SET || 'c2c-fatima-v2';
 const TIMES = {
-  roundAMs: Number(process.env.ROUND_A_SECONDS || 90) * 1000,
+  roundAMs: process.env.ROUND_A_SECONDS ? Number(process.env.ROUND_A_SECONDS) * 1000 : null, // null = each email's own time limit
   writeMs: Number(process.env.WRITE_MINUTES || 7) * 60000,
   reviewMs: Number(process.env.REVIEW_MINUTES || 10) * 60000,
 };
@@ -74,10 +74,11 @@ const seg = (id, field, text, mistakeType, explanation, extra = {}) => ({
 
 const SEED = {
   id: CONTENT_SET_ID,
-  name: 'Campus to Corporate, Fatima Group, v2',
+  name: 'Campus to Corporate, Fatima Group, v3 (6 Spot the Slip levels)',
+  // Ordered easiest to hardest. A session with N emails runs the first N.
   roundA: [
     {
-      id: 'ra1', title: 'Asking a senior for data', attachment: null,
+      id: 'ra1', level: 1, levelLabel: 'Warm-up', timeLimit: 75, title: 'Asking a senior for data', attachment: null,
       segments: [
         seg('ra1-1', 'to', 'Sana Malik (Manager, Supply Chain)'),
         seg('ra1-2', 'cc', 'Finance Department (all staff)', 'Recipients', 'No reason to copy the whole department on a simple request.'),
@@ -92,7 +93,21 @@ const SEED = {
       ],
     },
     {
-      id: 'ra2', title: 'Replying after a mistake', attachment: 'Weekly_Report_v2.xlsx',
+      id: 'ra3', level: 2, levelLabel: 'Easy', timeLimit: 90, title: 'Asking for leave', attachment: null,
+      segments: [
+        seg('ra3-1', 'to', 'Bilal Ahmed (Line Manager)'),
+        seg('ra3-2', 'subject', 'Leave', 'Subject', 'Too vague. Better: "Leave request: 14 to 15 December".'),
+        seg('ra3-3', 'body', 'Dear Bilal,', null, null, { newLine: true }),
+        seg('ra3-4', 'body', "I won't be coming tomorrow and the day after.", 'Tone', 'This informs rather than asks, at very short notice, without acknowledging it.'),
+        seg('ra3-5', 'body', 'I have a family wedding.'),
+        seg('ra3-6', 'body', 'Someone can handle my tasks.', 'Completeness', 'No handover plan. Name who will cover what, or what is already done.'),
+        seg('ra3-7', 'body', 'Also please reply fast.', 'Tone', 'Demanding tone toward your manager.'),
+        seg('ra3-8', 'body', 'I will be available on WhatsApp if anything is urgent.'),
+        seg('ra3-9', 'signoff', 'Sent from my iPhone', 'Sign-off', 'No name or sign-off.'),
+      ],
+    },
+    {
+      id: 'ra2', level: 3, levelLabel: 'Medium', timeLimit: 90, title: 'Replying after a mistake', attachment: 'Weekly_Report_v2.xlsx',
       segments: [
         seg('ra2-1', 'to', 'Ayesha Khan; Bilal Ahmed; Plant Operations Team (reply all)', 'Recipients', 'Replying to all puts a mistake in front of a wider team. Reply to the people who raised it.'),
         seg('ra2-2', 'subject', 'RE: RE: Weekly production report'),
@@ -106,17 +121,53 @@ const SEED = {
       ],
     },
     {
-      id: 'ra3', title: 'Asking for leave', attachment: null,
+      id: 'ra4', level: 4, levelLabel: 'Tricky', timeLimit: 105, title: 'Sharing meeting action points', attachment: null,
       segments: [
-        seg('ra3-1', 'to', 'Bilal Ahmed (Line Manager)'),
-        seg('ra3-2', 'subject', 'Leave', 'Subject', 'Too vague. Better: "Leave request: 14 to 15 December".'),
-        seg('ra3-3', 'body', 'Dear Bilal,', null, null, { newLine: true }),
-        seg('ra3-4', 'body', "I won't be coming tomorrow and the day after.", 'Tone', 'This informs rather than asks, at very short notice, without acknowledging it.'),
-        seg('ra3-5', 'body', 'I have a family wedding.'),
-        seg('ra3-6', 'body', 'Someone can handle my tasks.', 'Completeness', 'No handover plan. Name who will cover what, or what is already done.'),
-        seg('ra3-7', 'body', 'Also please reply fast.', 'Tone', 'Demanding tone toward your manager.'),
-        seg('ra3-8', 'body', 'I will be available on WhatsApp if anything is urgent.'),
-        seg('ra3-9', 'signoff', 'Sent from my iPhone', 'Sign-off', 'No name or sign-off.'),
+        seg('ra4-1', 'to', 'Mariam Ali; Hamza Iqbal; Bilal Ahmed'),
+        seg('ra4-2', 'cc', 'Ayesha Khan (Director Finance)', 'Recipients', 'Ayesha was not in the meeting. Copying a director on routine action points adds noise; brief her separately if she needs to know.'),
+        seg('ra4-3', 'subject', 'Follow up', 'Subject', 'Too generic to find later. Better: "Action points: Q4 forecast review".'),
+        seg('ra4-4', 'body', 'Dear all,', null, null, { newLine: true }),
+        seg('ra4-5', 'body', "Thank you for your time in today's meeting."),
+        seg('ra4-6', 'body', 'Please find the action points below.', null, null, { newLine: true }),
+        seg('ra4-7', 'body', '1. Mariam to share the revised Q4 forecast by Thursday 5 pm.', null, null, { newLine: true }),
+        seg('ra4-8', 'body', '2. Pricing issue to be looked into.', 'Completeness', 'No owner and no date, so nobody owns it. Name who will do it and by when.', { newLine: true }),
+        seg('ra4-9', 'body', '3. Hamza to confirm the new vendor rates at the earliest.', 'Completeness', '"At the earliest" is not a deadline. Give a date.', { newLine: true }),
+        seg('ra4-10', 'body', 'Kindly do the needful.', 'Clarity', 'Vague filler. The actions above already say what is needed; this line adds nothing and can read as an order.'),
+        seg('ra4-11', 'body', 'Our next review is on Monday at 11 am in the Finance meeting room.'),
+        seg('ra4-12', 'signoff', 'Regards, Ali Raza, Finance Trainee'),
+      ],
+    },
+    {
+      id: 'ra5', level: 5, levelLabel: 'Hard', timeLimit: 120, title: 'Chasing a delayed vendor payment', attachment: null,
+      segments: [
+        seg('ra5-1', 'to', 'Faisal Qureshi (Accounts Payable)'),
+        seg('ra5-2', 'cc', 'Bilal Ahmed (Line Manager); Ayesha Khan (Director Finance)', 'Recipients', 'Copying a director on a routine chase escalates too early and can embarrass the reader. Copy your manager only, and escalate if this goes unanswered.'),
+        seg('ra5-3', 'subject', 'RE: Team lunch on Friday', 'Subject', 'Replying on an old, unrelated thread hides the issue. Start a new email: "Payment overdue: Delta Packaging, PO 4471".'),
+        seg('ra5-4', 'body', 'Dear Faraz,', 'Greeting and name', 'The To line says Faisal. Getting the name wrong undercuts a request you need him to act on.', { newLine: true }),
+        seg('ra5-5', 'body', 'As per my last email, which you may have missed,', 'Tone', 'Passive-aggressive. A neutral line works better: "Following up on my email of Monday."'),
+        seg('ra5-6', 'body', 'the payment for Delta Packaging (PO 4471, PKR 1,240,000) is now 18 days overdue.'),
+        seg('ra5-7', 'body', 'Their account manager has called me twice this week.'),
+        seg('ra5-8', 'body', "I'm sure you are very busy, but this is getting embarrassing for all of us.", 'Tone', 'Blames and pressures the reader. State the impact plainly instead: "The vendor has asked twice and may pause deliveries."'),
+        seg('ra5-9', 'body', 'Could you please confirm when the payment will be released?'),
+        seg('ra5-10', 'body', 'If anything is needed from my side, I can share the invoice copy today.'),
+        seg('ra5-11', 'signoff', 'Thanks, Ali Raza, Finance Trainee'),
+      ],
+    },
+    {
+      id: 'ra6', level: 6, levelLabel: 'Expert', timeLimit: 120, title: 'Sending a revised quotation to a client', attachment: 'Quotation_AlNoor_Rev2.pdf',
+      segments: [
+        seg('ra6-1', 'to', 'Rabia Hasan (Procurement Lead, Al-Noor Foods)'),
+        seg('ra6-2', 'cc', 'Imran Shah (Regional Sales Head); Tariq Mehmood (Procurement, Ittehad Mills)', 'Recipients', "Tariq works for a different client. Sending one client's pricing to another is a serious leak. Check every address before an external email goes out."),
+        seg('ra6-3', 'subject', 'Revised quotation: Al-Noor Foods, November'),
+        seg('ra6-4', 'body', 'Dear Ms. Hassan,', 'Greeting and name', 'Her name is spelled Hasan in the To line. With external clients, small name errors cost credibility.', { newLine: true }),
+        seg('ra6-5', 'body', "Thank you for your time on Tuesday's call."),
+        seg('ra6-6', 'body', 'Please find attached the revised quotation reflecting the 8% volume discount we discussed.'),
+        seg('ra6-7', 'body', 'Internally we have approval to go up to 12% if needed, so there is room to negotiate.', 'Confidentiality', 'Internal approval limits must never go to a client. This line gives away your negotiating position.'),
+        seg('ra6-8', 'body', 'As you know, our prices are already the most competitive in the market.', 'Tone', 'Pushy and impossible to prove. Let the offer speak for itself, or give one concrete reason.'),
+        seg('ra6-9', 'body', 'These rates are valid until 30 November.'),
+        seg('ra6-10', 'body', 'To hold them, we would need your purchase order by 31 November.', 'Clarity', 'November has 30 days. A wrong date on a commercial deadline creates confusion; check dates before sending.'),
+        seg('ra6-11', 'body', 'Please let me know if you have any questions.'),
+        seg('ra6-12', 'signoff', 'Best regards, Sana Javed, Sales Executive, Fatima Group'),
       ],
     },
   ],
@@ -175,7 +226,8 @@ async function initDb() {
       id SERIAL PRIMARY KEY, session_code TEXT, email_id TEXT, old_scores JSONB, new_scores JSONB,
       by_user TEXT, at TIMESTAMPTZ DEFAULT now());
   `);
-  await pool.query('INSERT INTO il_content_sets (id, name, data) VALUES ($1,$2,$3) ON CONFLICT (id) DO NOTHING', [SEED.id, SEED.name, JSON.stringify(SEED)]);
+  // Content lives in code for now, so always refresh the stored copy. Existing sessions keep their own snapshot.
+  await pool.query('INSERT INTO il_content_sets (id, name, data) VALUES ($1,$2,$3) ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, data = EXCLUDED.data, updated_at = now()', [SEED.id, SEED.name, JSON.stringify(SEED)]);
 }
 
 async function loadContentSet(id) {
@@ -198,11 +250,12 @@ async function createSession({ client, program, date, tableCount, roundACount })
   let code = makeCode();
   for (let i = 0; i < 20 && (sessions.has(code) || (pool && (await pool.query('SELECT 1 FROM il_sessions WHERE code=$1', [code])).rowCount)); i++) code = makeCode();
   const tc = clamp(Number(tableCount) || 7, 1, 30);
-  const ra = clamp(Number(roundACount) || 2, 1, content.roundA.length);
+  const bank = content.roundA.slice().sort((a, b) => (a.level || 0) - (b.level || 0));
+  const ra = clamp(Number(roundACount) || bank.length, 1, bank.length);
   const S = {
     code, client: String(client || 'Client').slice(0, 80), program: String(program || 'Program').slice(0, 120), date: String(date || new Date().toISOString().slice(0, 10)),
     tableCount: tc, status: 'live', createdAt: now(), contentSetId: content.id,
-    content: { roundA: content.roundA.slice(0, ra), roundABank: content.roundA, situations: content.situations, scenarios: content.scenarios },
+    content: { roundA: bank.slice(0, ra), roundABank: bank, situations: content.situations, scenarios: content.scenarios },
     settings: { ...TIMES },
     cursor: 0, timer: null, explainId: null, stepStartedAt: now(),
     tables: Object.fromEntries(Array.from({ length: tc }, (_, i) => [i + 1, { captainId: null, offeredTo: null, declined: [] }])),
@@ -276,8 +329,9 @@ function buildSteps(S) {
   const st = [{ key: 'lobby', index: 0, total: 1, label: 'Lobby' }];
   const A = S.content.roundA.length;
   for (let i = 0; i < A; i++) {
-    st.push({ key: 'a_play', index: i, total: A, label: `Spot the Slip: email ${i + 1}` });
-    st.push({ key: 'a_reveal', index: i, total: A, label: `Spot the Slip: reveal ${i + 1}` });
+    const lv = S.content.roundA[i].levelLabel ? ` (${S.content.roundA[i].levelLabel})` : '';
+    st.push({ key: 'a_play', index: i, total: A, label: `Spot the Slip: email ${i + 1}${lv}` });
+    st.push({ key: 'a_reveal', index: i, total: A, label: `Spot the Slip: reveal ${i + 1}${lv}` });
   }
   const B = S.content.situations.length;
   for (let j = 0; j < B; j++) {
@@ -298,7 +352,7 @@ function buildSteps(S) {
 const curStep = (S) => { const st = buildSteps(S); return st[clamp(S.cursor, 0, st.length - 1)]; };
 
 function stepDuration(S, step) {
-  if (step.key === 'a_play') return S.settings.roundAMs;
+  if (step.key === 'a_play') return S.settings.roundAMs || (S.content.roundA[step.index].timeLimit || 90) * 1000;
   if (step.key === 'b_play') return (S.content.situations[step.index].timeLimit || 20) * 1000;
   if (step.key === 'lab2_write') return S.settings.writeMs;
   if (step.key === 'review') return S.settings.reviewMs;
@@ -412,27 +466,45 @@ function scoreB(sit, choice, elapsedMs) {
 
 function lab1Stats(S, pid) {
   const L = lab1Of(S, pid);
-  let points = 0; let caught = 0; let totalMistakes = 0; const caughtTypes = []; const missedTypes = []; let wrong = 0;
-  S.content.roundA.forEach((em) => {
+  let points = 0; let caught = 0; let totalMistakes = 0; let wrong = 0;
+  const types = {}; // mistake type -> { caught, total }
+  const levels = [];
+  S.content.roundA.forEach((em, i) => {
     const r = L.a[em.id];
-    const total = em.segments.filter((s) => s.isMistake).length;
-    totalMistakes += total;
-    if (r && r.submitted) { points += r.points; caught += r.caught; wrong += r.wrong; caughtTypes.push(...r.caughtTypes); missedTypes.push(...r.missedTypes); } else if (r === undefined || !r.submitted) {
-      if (S.locked[`a:${em.id}`]) missedTypes.push(...em.segments.filter((s) => s.isMistake).map((s) => s.mistakeType));
-    }
+    const done = !!(r && r.submitted);
+    if (!done && !S.locked[`a:${em.id}`]) return; // not played yet
+    const flags = new Set(done ? r.flags : []);
+    const mistakes = em.segments.filter((s) => s.isMistake);
+    let c = 0;
+    mistakes.forEach((s) => {
+      const t = types[s.mistakeType] || (types[s.mistakeType] = { caught: 0, total: 0 });
+      t.total += 1;
+      if (flags.has(s.id)) { t.caught += 1; c += 1; }
+    });
+    const w = done ? r.wrong : 0;
+    const pts = done ? r.points : 0;
+    totalMistakes += mistakes.length; caught += c; wrong += w; points += pts;
+    levels.push({ level: em.level || i + 1, label: em.levelLabel || '', title: em.title, caught: c, total: mistakes.length, wrong: w, points: pts });
   });
-  let credit = 0; let answered = 0; const missedSits = []; let best = 0; let acceptable = 0;
+  let credit = 0; let answered = 0; let best = 0; let acceptable = 0;
+  const missedSits = []; const channelRows = [];
   S.content.situations.forEach((sit) => {
     const r = L.b[sit.id];
-    if (r) { points += r.points; answered++; }
-    const ch = r && r.choice;
-    if (ch && sit.best.includes(ch)) { credit += 1; best++; } else if (ch && (sit.acceptable || []).includes(ch)) { credit += 0.5; acceptable++; missedSits.push({ sit, choice: ch }); } else if (S.locked[`b:${sit.id}`] || r) missedSits.push({ sit, choice: ch || null });
+    if (!r && !S.locked[`b:${sit.id}`]) return; // not played yet
+    if (r) { points += r.points; answered += 1; }
+    const ch = r ? r.choice : null;
+    let verdict = ch ? 'other' : 'none';
+    if (ch && sit.best.includes(ch)) { credit += 1; best += 1; verdict = 'best'; } else if (ch && (sit.acceptable || []).includes(ch)) { credit += 0.5; acceptable += 1; verdict = 'acceptable'; }
+    if (verdict !== 'best') missedSits.push({ sit, choice: ch });
+    channelRows.push({ short: sit.short, choice: ch, best: sit.best, acceptable: sit.acceptable || [], verdict });
   });
-  const sitsRun = S.content.situations.filter((s) => S.locked[`b:${s.id}`] || L.b[s.id]).length || S.content.situations.length;
+  const typeNames = Object.keys(types);
   return {
-    points, caught, totalMistakes, wrong,
-    caughtTypes: [...new Set(caughtTypes)], missedTypes: [...new Set(missedTypes.filter((t) => !caughtTypes.includes(t)))],
-    channelPct: Math.round((credit / sitsRun) * 100), channelBest: best, channelAcceptable: acceptable, channelAnswered: answered, missedSits,
+    points, caught, totalMistakes, wrong, types, levels,
+    caughtTypes: typeNames.filter((t) => types[t].caught > 0),
+    missedTypes: typeNames.filter((t) => types[t].caught < types[t].total),
+    channelPct: channelRows.length ? Math.round((credit / channelRows.length) * 100) : 0,
+    channelBest: best, channelAcceptable: acceptable, channelAnswered: answered, missedSits, channelRows,
   };
 }
 
@@ -452,8 +524,11 @@ function assignScenarios(S) {
       if (p.scenarioIds) return;
       let d = S.decks[t];
       if (!d) d = S.decks[t] = { deck: shuffle(ids), next: 0 };
-      p.scenarioIds = [d.deck[d.next % d.deck.length], d.deck[(d.next + 1) % d.deck.length]];
-      d.next += 2;
+      // first emails all differ within a table (up to 8 people), second emails too,
+      // and nobody gets the same scenario twice
+      const k = d.next; const half = Math.max(1, Math.floor(d.deck.length / 2));
+      p.scenarioIds = [d.deck[k % d.deck.length], d.deck[(k + half) % d.deck.length]];
+      d.next += 1;
     });
   });
 }
@@ -661,7 +736,11 @@ function summaryInput(S, pid) {
   const st = lab1Stats(S, pid);
   return {
     lab1: {
-      spot_the_slip: { caught: st.caught, total_planted: st.totalMistakes, wrong_flags: st.wrong, types_caught: st.caughtTypes, types_missed: st.missedTypes },
+      spot_the_slip: {
+        caught: st.caught, total_planted: st.totalMistakes, wrong_flags: st.wrong,
+        by_type: Object.fromEntries(Object.entries(st.types).map(([t, v]) => [t, `${v.caught} of ${v.total} caught`])),
+        by_level_easiest_first: st.levels.map((l) => ({ level: l.level, difficulty: l.label, caught: l.caught, of: l.total, wrong_flags: l.wrong })),
+      },
       pick_the_channel: {
         best_answers: st.channelBest, acceptable_answers: st.channelAcceptable, situations: S.content.situations.length,
         not_best: st.missedSits.map((m) => ({ situation: m.sit.text, chose: m.choice ? CHANNEL_LABEL[m.choice] : 'no answer', best: m.sit.best.map((b) => CHANNEL_LABEL[b]).join(' or ') })),
@@ -785,20 +864,35 @@ function buildReport(S, pid) {
   const profile = {};
   AREA_KEYS.forEach((k) => { profile[k] = done.length ? round1(avg(done.map((e) => e.ai.result.scores[k]))) : null; });
   const writingAvg = done.length ? round1(avg(done.map((e) => e.ai.result.total))) : null;
+  const chLabel = (keys) => keys.map((k) => CHANNEL_LABEL[k]).join(' or ');
 
-  const typesLine = `Caught: ${st.caughtTypes.join(', ') || 'none this time'}. To watch: ${st.missedTypes.join(', ') || 'none, every planted mistake found'}.`;
-  const sitLine = st.missedSits.length
-    ? `Channels to revisit: ${st.missedSits.slice(0, 3).map((m) => `${m.sit.short} (best: ${m.sit.best.map((b) => CHANNEL_LABEL[b]).join(' or ')})`).join('; ')}.`
-    : 'You chose the best channel in every situation.';
-  let lines = [typesLine, sitLine];
-  if (wc(lines.join(' ')) > 40) lines = [truncWords(typesLine, 18), truncWords(sitLine, 22)];
+  const toWatch = st.missedTypes.map((t) => ({ type: t, missed: st.types[t].total - st.types[t].caught, total: st.types[t].total }));
+  const lab1 = {
+    levels: st.levels,
+    caughtTypes: st.caughtTypes,
+    toWatch,
+    wrongFlags: st.wrong,
+    channelRows: st.channelRows.map((r) => ({ short: r.short, choice: r.choice ? CHANNEL_LABEL[r.choice] : 'No answer', best: chLabel(r.best), verdict: r.verdict })),
+  };
+
+  // short two-line version, kept for older clients
+  const typesLine = `Caught: ${st.caughtTypes.join(', ') || 'none this time'}.${toWatch.length ? ` To watch: ${toWatch.map((t) => t.type).join(', ')}.` : ' Every planted mistake found.'}`;
+  const sitLine = st.missedSits.length ? `Channels to revisit: ${st.missedSits.map((m) => m.sit.short).join(', ')}.` : 'You chose the best channel in every situation.';
+
+  const emails = done.map((e) => ({
+    slot: e.slot, scenarioTitle: scenarioById(S, e.scenarioId).title, subject: e.subject,
+    total: e.ai.result.total, scores: e.ai.result.scores,
+    strength: e.ai.result.strengths[0] || '', fix: e.ai.result.fixes[0] || '',
+    missing: (e.ai.result.missing_elements || []).slice(0, 3),
+  }));
 
   let improved = null;
   if (done.length) {
     const low = done.slice().sort((a, b) => a.ai.result.total - b.ai.result.total)[0];
     improved = {
-      original: { subject: low.subject, opening: truncWords(low.body, 35) },
-      polished: { subject: low.ai.result.polished_rewrite.subject, body: truncWords(low.ai.result.polished_rewrite.body, 60) },
+      scenarioTitle: scenarioById(S, low.scenarioId).title,
+      original: { subject: low.subject, opening: truncWords(low.body, 35), body: truncWords(low.body, 90) },
+      polished: { subject: low.ai.result.polished_rewrite.subject, body: truncWords(low.ai.result.polished_rewrite.body, 130) },
     };
   }
 
@@ -808,17 +902,26 @@ function buildReport(S, pid) {
   const headline = sm ? sm.headline : (done[0] ? done[0].ai.result.one_line_summary : 'Thank you for taking part in Interactive Labs.');
 
   let peer = null;
-  const myIds = new Set(emailsOf(S, pid).map((e) => e.id));
+  const mine = emailsOf(S, pid);
   Object.entries(S.review.selection).forEach(([t, eid]) => {
     const sub = S.review.submissions[t];
-    if (myIds.has(eid) && sub) peer = { doesWell: truncWords(sub.doesWell, 20), oneFix: truncWords(sub.oneFix, 20) };
+    const e = mine.find((x) => x.id === eid);
+    if (e && sub) {
+      peer = {
+        scenarioTitle: scenarioById(S, e.scenarioId).title,
+        doesWell: truncWords(sub.doesWell, 25), oneFix: truncWords(sub.oneFix, 25),
+        scores: sub.scores, total: AREA_KEYS.reduce((a, k) => a + sub.scores[k], 0),
+        aiTotal: e.ai.status === 'done' ? e.ai.result.total : null,
+      };
+    }
   });
 
   return {
     name: p.name, tableNumber: p.tableNumber, date: S.date, program: S.program, client: S.client,
     headline,
     tiles: { slipCaught: st.caught, slipTotal: st.totalMistakes, channelPct: st.channelPct, writingAvg },
-    profile, lab1Lines: lines, improved,
+    profile, lab1, emails, improved,
+    lab1Lines: [typesLine, sitLine],
     strengths: sm ? sm.top_strengths : fallbackStrengths,
     development: sm ? sm.development_areas : fallbackDev,
     nextSteps: sm ? sm.next_steps : ['Put your main request in the first two lines.', 'Give a specific date and time instead of "asap".', 'Write a subject that says what the email is about.'],
@@ -828,7 +931,7 @@ function buildReport(S, pid) {
 
 /* ================================================================ state builders */
 
-const publicEmail = (em) => ({ id: em.id, title: em.title, attachment: em.attachment, segments: em.segments.map((s) => ({ id: s.id, field: s.field, text: s.text, newLine: !!s.newLine })) });
+const publicEmail = (em) => ({ id: em.id, title: em.title, level: em.level || null, levelLabel: em.levelLabel || null, attachment: em.attachment, segments: em.segments.map((s) => ({ id: s.id, field: s.field, text: s.text, newLine: !!s.newLine })) });
 const publicScenario = (s) => ({ id: s.id, title: s.title, writerRole: s.writerRole, recipientName: s.recipientName, recipientRole: s.recipientRole, situation: s.situation });
 const joinedCount = (S) => Object.keys(S.participants).length;
 
@@ -859,12 +962,28 @@ function bCounts(S, sit) {
   Object.values(S.lab1).forEach((L) => { const r = L.b[sit.id]; if (r && c[r.choice] != null) c[r.choice]++; });
   return c;
 }
+// Group review, reveal and showcase are anonymous: remove the writer's name (full, first, last)
+// wherever it appears, e.g. in their sign-off. Only the facilitator console sees who wrote what.
+const escRx = (x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+function anonymise(S, e, text) {
+  const p = S.participants[e.pid];
+  let out = String(text || '');
+  if (!p) return out;
+  // keep words that are also in the recipient's name (e.g. writer Zara Ahmed writing to Bilal Ahmed)
+  const scn = scenarioById(S, e.scenarioId);
+  const keep = new Set(String((scn && scn.recipientName) || '').toLowerCase().split(/\s+/));
+  const parts = [p.name, ...p.name.split(/\s+/).filter((x) => !keep.has(x.toLowerCase()))].filter((x) => x && x.length >= 2).sort((a, b) => b.length - a.length);
+  parts.forEach((n) => { out = out.replace(new RegExp(`(^|[^\\p{L}])${escRx(n)}(?=[^\\p{L}]|$)`, 'giu'), '$1[Name]'); });
+  return out.replace(/\[Name\](\s+\[Name\])+/g, '[Name]');
+}
+const anonList = (S, e, arr) => (arr || []).map((x) => anonymise(S, e, x));
+
 function reviewItem(S, t) {
   const eid = S.review.selection[t];
   const e = eid && S.emails[eid];
   if (!e) return null;
   const scn = scenarioById(S, e.scenarioId);
-  return { scenario: publicScenario(scn), subject: e.subject, body: e.body, to: `${scn.recipientName}${scn.recipientRole ? ` (${scn.recipientRole})` : ''}` };
+  return { scenario: publicScenario(scn), subject: anonymise(S, e, e.subject), body: anonymise(S, e, e.body), to: `${scn.recipientName}${scn.recipientRole ? ` (${scn.recipientRole})` : ''}` };
 }
 function calibration(S) {
   const rows = [];
@@ -911,9 +1030,9 @@ function screenData(S) {
       return {
         number: st.index + 1, count: st.total, calibration: calibration(S),
         item: {
-          reviewingTable: t, scenario: { title: scn.title }, subject: e.subject, body: e.body,
+          reviewingTable: t, scenario: { title: scn.title }, subject: anonymise(S, e, e.subject), body: anonymise(S, e, e.body),
           peer: sub ? { scores: sub.scores, doesWell: sub.doesWell, oneFix: sub.oneFix } : null,
-          ai: e.ai.status === 'done' ? { scores: e.ai.result.scores, total: e.ai.result.total, strengths: e.ai.result.strengths, fixes: e.ai.result.fixes } : null,
+          ai: e.ai.status === 'done' ? { scores: e.ai.result.scores, total: e.ai.result.total, strengths: anonList(S, e, e.ai.result.strengths), fixes: anonList(S, e, e.ai.result.fixes) } : null,
         },
       };
     }
@@ -929,7 +1048,7 @@ function showcaseOut(S) {
   const id = S.showcase.liveEmailId;
   const e = id && S.emails[id];
   if (!e) return null;
-  return { subject: e.subject, body: e.body, scenarioTitle: scenarioById(S, e.scenarioId).title };
+  return { subject: anonymise(S, e, e.subject), body: anonymise(S, e, e.body), scenarioTitle: scenarioById(S, e.scenarioId).title };
 }
 
 function screenState(S) { return { ...common(S, 'screen'), data: screenData(S), showcase: showcaseOut(S) }; }
@@ -973,7 +1092,7 @@ function participantState(S, p) {
       break;
     }
     case 'review':
-      data = { item: reviewItem(S, p.tableNumber), submitted: !!S.review.submissions[p.tableNumber] };
+      data = { item: reviewItem(S, p.tableNumber), noEmail: !S.review.selection[p.tableNumber], submitted: !!S.review.submissions[p.tableNumber] };
       break;
     case 'reports':
     case 'close': {
@@ -1095,11 +1214,10 @@ function pdfBuffer(build, opts = {}) {
 function drawLogos(doc, x, y, w, h) {
   const a = asset('logo.png'); const b = asset('client-logo.png');
   if (!a && !b) return;
-  doc.save().roundedRect(x, y, w, h, 6).fill('#FFFFFF').restore();
   const imgs = [a, b].filter(Boolean);
-  const slot = (w - 12) / imgs.length;
+  const slot = w / imgs.length;
   imgs.forEach((img, i) => {
-    try { doc.image(img, x + 6 + i * slot, y + 6, { fit: [slot - 6, h - 12], align: 'center', valign: 'center' }); } catch (e) { /* bad image */ }
+    try { doc.image(img, x + i * slot, y, { fit: [slot - 8, h], align: 'right', valign: 'center' }); } catch (e) { /* bad image */ }
   });
 }
 
@@ -1130,87 +1248,186 @@ function bullet(doc, text, x, y, w, h, size = 8.5) {
   doc.font('Helvetica').fontSize(size).fillColor(TEXT).text(pdfSafe(text), x + 9, y, { width: w - 9, height: h, ellipsis: true });
 }
 
-/* --- one-page personal report */
+/* --- two-page personal report */
+
+const VERDICT = { best: ['Best answer', '#15803D'], acceptable: ['Acceptable', '#B45309'], other: ['Revisit', ACCENT], none: ['No answer', MUTED] };
+
+function reportHeader(doc, r, W, M, CW, full) {
+  const h = full ? 78 : 44;
+  doc.rect(0, 0, W, h).fill(NAVY);
+  doc.rect(0, 0, W, 5).fill(ORANGE);
+  if (full) {
+    doc.font('Helvetica-Bold').fontSize(7.5).fillColor(ACCENT_L).text('INTERACTIVE LABS: YOUR REPORT', M, 15, { characterSpacing: 1, lineBreak: false });
+    doc.font('Helvetica-Bold').fontSize(18).fillColor('#FFFFFF').text(pdfSafe(r.name), M, 27, { width: CW - 200, height: 22, ellipsis: true });
+    doc.font('Helvetica').fontSize(8.5).fillColor('#C9D0DE').text(pdfSafe(`Table ${r.tableNumber}  |  ${r.program}  |  ${r.date}  |  ${r.client}`), M, 52, { width: CW - 200, height: 12, ellipsis: true });
+    drawLogos(doc, W - M - 180, 16, 180, 46);
+  } else {
+    doc.font('Helvetica-Bold').fontSize(7.5).fillColor(ACCENT_L).text('LAB 2: WRITING WITH RESPECT', M, 15, { characterSpacing: 1, lineBreak: false });
+    doc.font('Helvetica-Bold').fontSize(11).fillColor('#FFFFFF').text(pdfSafe(r.name), M, 25, { width: CW - 200, height: 14, ellipsis: true });
+    drawLogos(doc, W - M - 120, 10, 120, 28);
+  }
+}
+function reportFooter(doc, r, W, M, CW, page) {
+  doc.save().moveTo(M, 800).lineTo(W - M, 800).lineWidth(0.5).strokeColor(LINE).stroke().restore();
+  doc.font('Helvetica').fontSize(7.5).fillColor(MUTED).text(pdfSafe(`Interactive Labs  |  ${r.name}`), M, 808, { width: CW / 3, lineBreak: false, height: 10, ellipsis: true });
+  doc.text('We will revisit this at your 30-day check-in.', M + CW / 3, 808, { width: CW / 3, align: 'center', lineBreak: false });
+  doc.text(`Page ${page} of 2`, M + (2 * CW) / 3, 808, { width: CW / 3, align: 'right', lineBreak: false });
+}
+function labBand(doc, text, M, y, CW) {
+  doc.roundedRect(M, y, CW, 18, 4).fill(SOFT);
+  doc.font('Helvetica-Bold').fontSize(8).fillColor(NAVY).text(text, M + 8, y + 5, { characterSpacing: 0.8, lineBreak: false });
+}
 
 function drawReport(doc, r) {
-  const W = 595.28; const M = 36; const CW = W - 2 * M;
+  const W = 595.28; const M = 36; const CW = W - 2 * M; const bw = (CW - 10) / 2;
+  const lab1 = r.lab1 || { levels: [], caughtTypes: [], toWatch: [], channelRows: [] };
 
-  doc.rect(0, 0, W, 78).fill(NAVY);
-  doc.rect(0, 0, W, 5).fill(ORANGE);
-  doc.font('Helvetica-Bold').fontSize(7.5).fillColor(ACCENT_L).text('INTERACTIVE LABS: YOUR REPORT', M, 15, { characterSpacing: 1, lineBreak: false });
-  doc.font('Helvetica-Bold').fontSize(18).fillColor('#FFFFFF').text(pdfSafe(r.name), M, 27, { width: CW - 200, height: 22, ellipsis: true });
-  doc.font('Helvetica').fontSize(8.5).fillColor('#C9D0DE').text(pdfSafe(`Table ${r.tableNumber}  |  ${r.program}  |  ${r.date}  |  ${r.client}`), M, 52, { width: CW - 200, height: 12, ellipsis: true });
-  drawLogos(doc, W - M - 180, 16, 180, 46);
-
+  /* ---------- page 1: overview and Lab 1 */
+  reportHeader(doc, r, W, M, CW, true);
   doc.font('Helvetica-Bold').fontSize(12.5).fillColor(NAVY).text(pdfSafe(r.headline), M, 90, { width: CW, height: 32, ellipsis: true });
 
   const tw = (CW - 16) / 3;
-  const tiles = [
+  [
     [`${r.tiles.slipCaught}/${r.tiles.slipTotal}`, 'Spot the Slip'],
     [`${r.tiles.channelPct}%`, 'Channel judgement'],
     [r.tiles.writingAvg != null ? `${r.tiles.writingAvg}/30` : '-', 'Writing'],
-  ];
-  tiles.forEach(([v, l], i) => {
+  ].forEach(([v, l], i) => {
     const x = M + i * (tw + 8);
     doc.roundedRect(x, 126, tw, 50, 8).fill(NAVY);
     doc.font('Helvetica-Bold').fontSize(19).fillColor('#FFFFFF').text(v, x, 133, { width: tw, align: 'center', lineBreak: false });
     doc.font('Helvetica').fontSize(7.5).fillColor('#C9D0DE').text(l, x, 158, { width: tw, align: 'center', lineBreak: false });
   });
-  keyLine(doc, 'Key: Spot the Slip = planted mistakes flagged out of total. Channel judgement = best answer full credit, acceptable half. Writing = average rubric total of your two emails.', M, 180, CW);
+  keyLine(doc, 'Key: Spot the Slip = planted mistakes flagged out of total. Channel judgement = best answer full credit, acceptable half. Writing = average of your two emails (out of 30).', M, 180, CW);
 
-  secTitle(doc, 'Writing profile', M, 200);
-  drawRadar(doc, M + 82, 292, 60, r.profile);
+  secTitle(doc, 'Strengths', M, 200);
+  secTitle(doc, 'Development areas', M + bw + 10, 200);
+  (r.strengths || []).slice(0, 2).forEach((s, i) => bullet(doc, s, M, 217 + i * 22, bw, 21));
+  (r.development || []).slice(0, 2).forEach((s, i) => bullet(doc, s, M + bw + 10, 217 + i * 22, bw, 21));
+  keyLine(doc, 'Key: what to keep doing, and the areas that will lift your communication most. Drawn from both labs.', M, 263, CW);
+
+  secTitle(doc, 'Next steps', M, 281);
+  (r.nextSteps || []).slice(0, 3).forEach((s, i) => bullet(doc, s, M, 298 + i * 15, CW, 14));
+
+  labBand(doc, 'LAB 1: CHOOSING THE RIGHT CHANNEL', M, 350, CW);
+
+  secTitle(doc, 'Spot the Slip by level', M, 378);
+  const levels = lab1.levels || [];
+  levels.slice(0, 6).forEach((l, i) => {
+    const y = 395 + i * 15;
+    doc.font('Helvetica-Bold').fontSize(8).fillColor(NAVY).text(`L${l.level} ${l.label}`, M, y, { width: 70, lineBreak: false });
+    doc.font('Helvetica').fontSize(8).fillColor(TEXT).text(pdfSafe(l.title), M + 72, y, { width: 168, height: 10, ellipsis: true, lineBreak: false });
+    doc.roundedRect(M + 245, y + 1, 150, 7, 3.5).fill(SOFT);
+    if (l.total) doc.roundedRect(M + 245, y + 1, Math.max(2, (150 * l.caught) / l.total), 7, 3.5).fill(NAVY);
+    doc.font('Helvetica-Bold').fontSize(8).fillColor(NAVY).text(`${l.caught}/${l.total} caught`, M + 402, y, { width: 60, lineBreak: false });
+    doc.font('Helvetica').fontSize(7.5).fillColor(MUTED).text(l.wrong ? `${l.wrong} extra flag${l.wrong > 1 ? 's' : ''}` : '', M + 462, y, { width: CW - 462, align: 'right', lineBreak: false });
+  });
+  if (!levels.length) doc.font('Helvetica').fontSize(8.5).fillColor(MUTED).text('No Spot the Slip results.', M, 397);
+  keyLine(doc, 'Key: emails get harder from level 1 to the last level. Extra flags are parts you flagged that were correct (5 points off each).', M, 488, CW);
+
+  secTitle(doc, 'Mistake types', M, 506);
+  doc.font('Helvetica-Bold').fontSize(8.5).fillColor(TEXT).text('Caught: ', M, 523, { continued: true }).font('Helvetica').text(pdfSafe(lab1.caughtTypes.length ? lab1.caughtTypes.join(', ') : 'none this time'), { width: CW, height: 12, ellipsis: true });
+  doc.font('Helvetica-Bold').fontSize(8.5).fillColor(TEXT).text('To watch: ', M, 537, { continued: true }).font('Helvetica')
+    .text(pdfSafe(lab1.toWatch.length ? lab1.toWatch.map((t) => `${t.type} (missed ${t.missed} of ${t.total})`).join(', ') : 'none, every planted mistake found'), { width: CW, height: 24, ellipsis: true });
+  keyLine(doc, 'Key: a type is listed under To watch if you missed at least one mistake of that type.', M, 563, CW);
+
+  secTitle(doc, 'Pick the Channel', M, 581);
+  const cols = [[M, 190, 'Situation'], [M + 192, 110, 'Your choice'], [M + 304, 140, 'Best channel'], [M + 446, CW - 446, 'Result']];
+  cols.forEach(([x, w, t]) => doc.font('Helvetica-Bold').fontSize(7).fillColor(MUTED).text(t.toUpperCase(), x, 598, { width: w, lineBreak: false, characterSpacing: 0.4 }));
+  doc.save().moveTo(M, 608).lineTo(W - M, 608).lineWidth(0.5).strokeColor(LINE).stroke().restore();
+  (lab1.channelRows || []).slice(0, 8).forEach((c, i) => {
+    const y = 612 + i * 13;
+    const [vt, vc] = VERDICT[c.verdict] || VERDICT.none;
+    if (i % 2) doc.rect(M, y - 2, CW, 13).fill('#FAFAFB');
+    doc.font('Helvetica').fontSize(8).fillColor(TEXT).text(pdfSafe(c.short), cols[0][0], y, { width: cols[0][1], lineBreak: false, height: 10, ellipsis: true });
+    doc.text(pdfSafe(c.choice), cols[1][0], y, { width: cols[1][1], lineBreak: false });
+    doc.text(pdfSafe(c.best), cols[2][0], y, { width: cols[2][1], lineBreak: false, height: 10, ellipsis: true });
+    doc.font('Helvetica-Bold').fillColor(vc).text(vt, cols[3][0], y, { width: cols[3][1], lineBreak: false });
+  });
+  keyLine(doc, 'Key: Best answer = full credit plus a speed bonus. Acceptable = half credit. Revisit = a different channel would serve this situation better.', M, 718, CW);
+
+  secTitle(doc, 'What Lab 1 shows', M, 736);
+  const insight = r.lab1Insight || `You caught ${r.tiles.slipCaught} of ${r.tiles.slipTotal} planted mistakes and chose the best channel in ${(lab1.channelRows || []).filter((c) => c.verdict === 'best').length} of ${(lab1.channelRows || []).length} situations.`;
+  doc.font('Helvetica').fontSize(8.5).fillColor(TEXT).text(pdfSafe(insight), M, 753, { width: CW, height: 40, ellipsis: true });
+
+  reportFooter(doc, r, W, M, CW, 1);
+
+  /* ---------- page 2: Lab 2 */
+  doc.addPage({ size: 'A4', margin: 0 });
+  reportHeader(doc, r, W, M, CW, false);
+
+  secTitle(doc, 'Writing profile', M, 58);
+  drawRadar(doc, M + 82, 148, 56, r.profile || {});
   const lx = M + 190; const lw = CW - 190;
   AREAS.forEach((a, i) => {
-    const y = 222 + i * 22; const v = r.profile[a.key];
+    const y = 80 + i * 21; const v = (r.profile || {})[a.key];
     doc.font('Helvetica').fontSize(8.5).fillColor(TEXT).text(a.label, lx, y, { width: 120, lineBreak: false });
     doc.roundedRect(lx + 125, y + 1, lw - 170, 7, 3.5).fill(SOFT);
     if (v != null) doc.roundedRect(lx + 125, y + 1, ((lw - 170) * v) / 5, 7, 3.5).fill(ACCENT);
     doc.font('Helvetica-Bold').fontSize(8.5).fillColor(NAVY).text(v != null ? `${v} / 5` : '-', lx + lw - 40, y, { width: 40, align: 'right', lineBreak: false });
   });
-  keyLine(doc, 'Key: average of your two emails in each area. 1 = development priority, 3 = adequate, 5 = strong.', M, 362, CW);
+  keyLine(doc, 'Key: average of your two emails in each area. 1 = development priority, 3 = adequate, 5 = strong.', M, 212, CW);
 
-  secTitle(doc, 'How you spotted and chose', M, 380);
-  (r.lab1Lines || []).forEach((l, i) => doc.font('Helvetica').fontSize(8.5).fillColor(TEXT).text(pdfSafe(l), M, 397 + i * 14, { width: CW, height: 13, ellipsis: true }));
-  keyLine(doc, 'Key: mistake types you caught in Spot the Slip and the Pick the Channel situations worth another look.', M, 427, CW);
+  secTitle(doc, 'Your two emails', M, 230);
+  const emails = (r.emails || []).slice(0, 2);
+  if (!emails.length) doc.font('Helvetica').fontSize(8.5).fillColor(MUTED).text('No scored Lab 2 email.', M, 250);
+  emails.forEach((e, i) => {
+    const x = M + i * (bw + 10); const y = 246;
+    doc.roundedRect(x, y, bw, 160, 6).lineWidth(0.6).strokeColor(LINE).stroke();
+    doc.font('Helvetica-Bold').fontSize(7).fillColor(ACCENT).text(`EMAIL ${e.slot + 1}`, x + 8, y + 8, { characterSpacing: 0.5, lineBreak: false });
+    doc.font('Helvetica-Bold').fontSize(9).fillColor(NAVY).text(pdfSafe(e.scenarioTitle), x + 8, y + 17, { width: bw - 70, height: 11, ellipsis: true, lineBreak: false });
+    doc.font('Helvetica-Bold').fontSize(15).fillColor(NAVY).text(`${e.total}`, x + bw - 62, y + 8, { width: 34, align: 'right', lineBreak: false });
+    doc.font('Helvetica').fontSize(8).fillColor(MUTED).text('/30', x + bw - 27, y + 14, { width: 22, lineBreak: false });
+    const cw = (bw - 16) / 6;
+    AREAS.forEach((a, k) => {
+      const cx = x + 8 + k * cw;
+      doc.roundedRect(cx + 1, y + 33, cw - 2, 22, 3).fill(SOFT);
+      doc.font('Helvetica').fontSize(6).fillColor(MUTED).text(a.short, cx + 1, y + 36, { width: cw - 2, align: 'center', lineBreak: false });
+      doc.font('Helvetica-Bold').fontSize(8.5).fillColor(NAVY).text(String(e.scores[a.key]), cx + 1, y + 44, { width: cw - 2, align: 'center', lineBreak: false });
+    });
+    const block = (label, text, yy, h) => {
+      doc.font('Helvetica-Bold').fontSize(7).fillColor(MUTED).text(label, x + 8, yy, { lineBreak: false, characterSpacing: 0.4 });
+      doc.font('Helvetica').fontSize(8).fillColor(TEXT).text(pdfSafe(text || '-'), x + 8, yy + 9, { width: bw - 16, height: h, ellipsis: true });
+    };
+    block('WORKED WELL', e.strength, y + 62, 21);
+    block('TO IMPROVE', e.fix, y + 95, 21);
+    block('MISSING', (e.missing || []).length ? e.missing.join('; ') : 'Nothing major missing', y + 128, 21);
+  });
+  keyLine(doc, 'Key: each email scored on six areas (1 to 5). Ask = clear ask, Complete = completeness. Feedback quotes what you actually wrote.', M, 410, CW);
 
-  secTitle(doc, 'Your email, improved', M, 445);
-  const bw = (CW - 10) / 2;
+  secTitle(doc, 'Your email, improved', M, 428);
   if (r.improved) {
-    const boxes = [
-      [M, SOFT, 'YOU WROTE', r.improved.original.subject || '(no subject)', r.improved.original.opening],
+    doc.font('Helvetica').fontSize(7.5).fillColor(MUTED).text(pdfSafe(`Your lower-scoring email: ${r.improved.scenarioTitle || ''}`), M + 150, 429, { width: CW - 150, align: 'right', lineBreak: false, height: 10, ellipsis: true });
+    [
+      [M, SOFT, 'YOU WROTE', r.improved.original.subject || '(no subject)', r.improved.original.body || r.improved.original.opening],
       [M + bw + 10, OKSOFT, 'A STRONGER VERSION', r.improved.polished.subject, r.improved.polished.body],
-    ];
-    boxes.forEach(([x, bg, lab, subj, body]) => {
-      doc.roundedRect(x, 461, bw, 100, 6).fill(bg);
-      doc.font('Helvetica-Bold').fontSize(6.8).fillColor(MUTED).text(lab, x + 8, 467, { characterSpacing: 0.5, lineBreak: false });
-      doc.font('Helvetica-Bold').fontSize(8.3).fillColor(TEXT).text(pdfSafe(subj), x + 8, 478, { width: bw - 16, height: 11, ellipsis: true });
-      doc.font('Helvetica').fontSize(8).fillColor(TEXT).text(pdfSafe(body), x + 8, 492, { width: bw - 16, height: 64, ellipsis: true });
+    ].forEach(([x, bg, lab, subj, body]) => {
+      doc.roundedRect(x, 444, bw, 172, 6).fill(bg);
+      doc.font('Helvetica-Bold').fontSize(6.8).fillColor(MUTED).text(lab, x + 8, 450, { characterSpacing: 0.5, lineBreak: false });
+      doc.font('Helvetica-Bold').fontSize(8.3).fillColor(TEXT).text(pdfSafe(subj), x + 8, 461, { width: bw - 16, height: 11, ellipsis: true });
+      doc.font('Helvetica').fontSize(7.8).fillColor(TEXT).text(pdfSafe(body), x + 8, 475, { width: bw - 16, height: 136, ellipsis: true, lineGap: 0.5 });
     });
   } else {
-    doc.font('Helvetica').fontSize(8.5).fillColor(MUTED).text('No scored Lab 2 email yet.', M, 465);
+    doc.font('Helvetica').fontSize(8.5).fillColor(MUTED).text('No scored Lab 2 email yet.', M, 448);
   }
-  keyLine(doc, 'Key: the opening of your lower-scoring email next to a polished version with the same intent.', M, 564, CW);
+  keyLine(doc, 'Key: your lower-scoring email next to a polished version with the same intent and voice. Use it as a model, not a script.', M, 619, CW);
 
-  secTitle(doc, 'Strengths', M, 582);
-  secTitle(doc, 'Development areas', M + bw + 10, 582);
-  (r.strengths || []).slice(0, 2).forEach((s, i) => bullet(doc, s, M, 599 + i * 21, bw, 20));
-  (r.development || []).slice(0, 2).forEach((s, i) => bullet(doc, s, M + bw + 10, 599 + i * 21, bw, 20));
-  keyLine(doc, 'Key: what to keep doing, and the areas that will lift your writing most.', M, 643, CW);
-
-  secTitle(doc, 'Next steps', M, 661);
-  (r.nextSteps || []).slice(0, 3).forEach((s, i) => bullet(doc, s, M, 678 + i * 14, CW, 13));
-
+  let y2 = 637;
   if (r.peer) {
-    doc.roundedRect(M, 724, CW, 62, 6).fill(PEERBG);
-    secTitle(doc, 'Peer note', M + 8, 730);
-    doc.font('Helvetica-Bold').fontSize(8.3).fillColor(TEXT).text('Does well: ', M + 8, 747, { continued: true }).font('Helvetica').text(pdfSafe(r.peer.doesWell), { width: CW - 16, height: 12, ellipsis: true });
-    doc.font('Helvetica-Bold').fontSize(8.3).fillColor(TEXT).text('One fix: ', M + 8, 760, { continued: true }).font('Helvetica').text(pdfSafe(r.peer.oneFix), { width: CW - 16, height: 12, ellipsis: true });
-    keyLine(doc, 'Key: feedback from the table that reviewed your email. Peer feedback, separate from your scores.', M + 8, 774, CW - 16);
+    doc.roundedRect(M, y2, CW, 70, 6).fill(PEERBG);
+    secTitle(doc, 'Peer note', M + 8, y2 + 7);
+    doc.font('Helvetica').fontSize(7.5).fillColor(MUTED).text(pdfSafe(`Your "${r.peer.scenarioTitle}" email was reviewed anonymously by another table. Their total: ${r.peer.total}/30${r.peer.aiTotal != null ? `, AI total: ${r.peer.aiTotal}/30` : ''}.`), M + 110, y2 + 8, { width: CW - 118, align: 'right', height: 10, ellipsis: true, lineBreak: false });
+    doc.font('Helvetica-Bold').fontSize(8.3).fillColor(TEXT).text('Does well: ', M + 8, y2 + 25, { continued: true }).font('Helvetica').text(pdfSafe(r.peer.doesWell), { width: CW - 16, height: 12, ellipsis: true });
+    doc.font('Helvetica-Bold').fontSize(8.3).fillColor(TEXT).text('One fix: ', M + 8, y2 + 39, { continued: true }).font('Helvetica').text(pdfSafe(r.peer.oneFix), { width: CW - 16, height: 12, ellipsis: true });
+    keyLine(doc, 'Key: peer feedback from the table that reviewed your email. It is kept separate from your scores.', M + 8, y2 + 55, CW - 16);
+    y2 += 80;
   }
 
-  doc.save().moveTo(M, 800).lineTo(W - M, 800).lineWidth(0.5).strokeColor(LINE).stroke().restore();
-  doc.font('Helvetica').fontSize(8).fillColor(MUTED).text('We will revisit this at your 30-day check-in.', M, 808, { width: CW, align: 'center', lineBreak: false });
+  doc.roundedRect(M, y2, CW, 66, 6).lineWidth(0.8).strokeColor(NAVY).stroke();
+  secTitle(doc, 'Before your 30-day check-in', M + 8, y2 + 8);
+  doc.font('Helvetica').fontSize(8.3).fillColor(TEXT).text('One habit I will practise in my emails from today:', M + 8, y2 + 26, { lineBreak: false });
+  [42, 57].forEach((dy) => doc.save().moveTo(M + 8, y2 + dy).lineTo(W - M - 8, y2 + dy).dash(1.5, { space: 2 }).lineWidth(0.6).strokeColor('#98A2B3').stroke().undash().restore());
+
+  reportFooter(doc, r, W, M, CW, 2);
 }
 
 const reportPDF = (S, pid) => pdfBuffer((doc) => drawReport(doc, buildReport(S, pid)), { title: `Interactive Labs Report: ${S.participants[pid].name}` });
@@ -1250,7 +1467,14 @@ function cohortStats(S) {
     if (sub && e && e.ai.status === 'done') gaps.push(AREA_KEYS.reduce((a, k) => a + sub.scores[k], 0) - e.ai.result.total);
   });
   const slipTotal = stats.reduce((a, x) => a + x.s.totalMistakes, 0);
+  const lv = {};
+  stats.forEach(({ s }) => s.levels.forEach((l) => {
+    const o = lv[l.level] || (lv[l.level] = { level: l.level, label: l.label, title: l.title, caught: 0, total: 0 });
+    o.caught += l.caught; o.total += l.total;
+  }));
+  const levelRows = Object.values(lv).sort((a, b) => a.level - b.level).map((o) => ({ ...o, pct: o.total ? Math.round((o.caught / o.total) * 100) : 0 }));
   return {
+    levelRows,
     joined: ps.length, lab1Done, lab2Done,
     lab1Avg: round1(avg(stats.map((x) => x.s.points))),
     slipPct: slipTotal ? Math.round((stats.reduce((a, x) => a + x.s.caught, 0) / slipTotal) * 100) : null,
@@ -1304,6 +1528,11 @@ async function cohortPDF(S, refresh) {
 
     h2('Lab 1: Choosing the Right Channel');
     para(`Average Lab 1 score: ${c.lab1Avg ?? '-'} points. Planted mistakes caught: ${c.slipPct ?? '-'}%. Channel judgement: ${c.channelPct ?? '-'}%.`);
+    if (c.levelRows.length) {
+      doc.moveDown(0.4); para('Spot the Slip: share of planted mistakes caught, by level', { bold: true, size: 9 }); doc.moveDown(0.2);
+      bars(c.levelRows.map((l) => ({ label: `Level ${l.level} ${l.label}: ${l.title}`, v: l.pct, text: `${l.pct}%`, color: NAVY })), 100);
+      key('Key: emails get harder from level 1 upward. A steady drop shows where the cohort\'s eye for detail reaches its limit.');
+    }
     doc.moveDown(0.4); para('Mistakes most often missed', { bold: true, size: 9 }); doc.moveDown(0.2);
     bars(c.missedTypes.map((m) => ({ label: m.type, v: m.pct, text: `${m.pct}%` })), 100);
     key('Key: share of participants who did not flag a planted mistake of that type in Spot the Slip.');
@@ -1347,8 +1576,8 @@ async function cohortPDF(S, refresh) {
       h2('Example emails (shared with consent, anonymised)');
       c.showcase.forEach((e) => {
         need(90);
-        para(`${scenarioById(S, e.scenarioId).title}: ${e.subject || '(no subject)'}`, { bold: true, size: 9 });
-        para(e.body, { size: 8.5 });
+        para(`${scenarioById(S, e.scenarioId).title}: ${anonymise(S, e, e.subject) || '(no subject)'}`, { bold: true, size: 9 });
+        para(anonymise(S, e, e.body), { size: 8.5 });
         doc.moveDown(0.5);
       });
     }
@@ -1407,6 +1636,7 @@ function cohortCSV(S) {
   const rows = [['Section', 'Metric', 'Value'],
     ['Participation', 'Joined', c.joined], ['Participation', 'Completed Lab 1', c.lab1Done], ['Participation', 'Completed Lab 2', c.lab2Done],
     ['Lab 1', 'Average points', c.lab1Avg], ['Lab 1', 'Planted mistakes caught %', c.slipPct], ['Lab 1', 'Channel judgement %', c.channelPct],
+    ...c.levelRows.map((l) => ['Lab 1 caught by level', `Level ${l.level} ${l.label}: ${l.title}`, `${l.pct}%`]),
     ...c.missedTypes.map((m) => ['Lab 1 missed', m.type, `${m.pct}%`]),
     ...c.channelSplits.flatMap((cs) => CHANNELS.map((k) => [`Channel: ${cs.short}`, CHANNEL_LABEL[k], cs.counts[k]])),
     ['Lab 2', 'Average total', c.lab2Avg], ...AREAS.map((a) => ['Lab 2 area average', a.label, c.areaAvg[a.key]]),

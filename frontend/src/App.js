@@ -364,9 +364,13 @@ function ScorePicker({ value, onChange, disabled }) {
 
 /* ---------------------------------------------------------------- report (in app) */
 
+const VERDICT_UI = { best: ['Best answer', 'ok'], acceptable: ['Acceptable', 'warn'], other: ['Revisit', 'bad'], none: ['No answer', ''] };
+
 function ReportView({ report, pdfUrl }) {
   if (!report) return null;
   const t = report.tiles || {};
+  const lab1 = report.lab1 || { levels: [], caughtTypes: [], toWatch: [], channelRows: [] };
+  const emails = report.emails || [];
   return (
     <div className="report">
       <div className="rep-head">
@@ -384,7 +388,75 @@ function ReportView({ report, pdfUrl }) {
         <div className="tile"><div className="tile-v">{t.channelPct ?? '-'}<span>%</span></div><div className="tile-l">Channel judgement</div></div>
         <div className="tile"><div className="tile-v">{t.writingAvg ?? '-'}<span>/30</span></div><div className="tile-l">Writing</div></div>
       </div>
-      <div className="key">Key: Spot the Slip is planted mistakes you flagged out of the total. Channel judgement counts a best answer as full credit and an acceptable answer as half. Writing is the average rubric total of your two Lab 2 emails (6 areas, 1 to 5 each).</div>
+      <div className="key">Key: Spot the Slip is planted mistakes you flagged out of the total. Channel judgement counts a best answer as full credit and an acceptable answer as half. Writing is the average of your two Lab 2 emails, out of 30.</div>
+
+      <section className="rep-sec two">
+        <div>
+          <h3>Strengths</h3>
+          <ul className="bul">{(report.strengths || []).map((s, i) => <li key={i}>{s}</li>)}</ul>
+        </div>
+        <div>
+          <h3>Development areas</h3>
+          <ul className="bul">{(report.development || []).map((s, i) => <li key={i}>{s}</li>)}</ul>
+        </div>
+      </section>
+      <div className="key">Key: what to keep doing, and the areas that will lift your communication most. Drawn from both labs.</div>
+
+      <section className="rep-sec">
+        <h3>Next steps</h3>
+        <ol className="bul">{(report.nextSteps || []).map((s, i) => <li key={i}>{s}</li>)}</ol>
+      </section>
+
+      <div className="lab-band">Lab 1: Choosing the Right Channel</div>
+
+      {lab1.levels.length > 0 && (
+        <section className="rep-sec">
+          <h3>Spot the Slip by level</h3>
+          {lab1.levels.map((l) => (
+            <div key={l.level} className="lvl">
+              <div className="lvl-top">
+                <span><b>L{l.level} {l.label}</b> <span className="muted">{l.title}</span></span>
+                <b>{l.caught}/{l.total}</b>
+              </div>
+              <div className="lvl-track"><div className="lvl-fill" style={{ width: `${l.total ? (l.caught / l.total) * 100 : 0}%` }} /></div>
+              {l.wrong > 0 && <div className="muted small">{l.wrong} extra flag{l.wrong > 1 ? 's' : ''}</div>}
+            </div>
+          ))}
+          <div className="key">Key: emails get harder from level 1 upward. Extra flags are parts you flagged that were correct (5 points off each).</div>
+        </section>
+      )}
+
+      <section className="rep-sec">
+        <h3>Mistake types</h3>
+        <p className="line"><b>Caught:</b> {lab1.caughtTypes.length ? lab1.caughtTypes.join(', ') : 'none this time'}</p>
+        <p className="line"><b>To watch:</b> {lab1.toWatch.length ? lab1.toWatch.map((x) => `${x.type} (missed ${x.missed} of ${x.total})`).join(', ') : 'none, every planted mistake found'}</p>
+        <div className="key">Key: a type is listed under To watch if you missed at least one mistake of that type.</div>
+      </section>
+
+      {lab1.channelRows.length > 0 && (
+        <section className="rep-sec">
+          <h3>Pick the Channel</h3>
+          <table className="ch-table">
+            <thead><tr><th>Situation</th><th>You</th><th>Best</th><th /></tr></thead>
+            <tbody>
+              {lab1.channelRows.map((c, i) => {
+                const [label, tone] = VERDICT_UI[c.verdict] || VERDICT_UI.none;
+                return <tr key={i}><td>{c.short}</td><td>{c.choice}</td><td>{c.best}</td><td><span className={`badge ${tone}`}>{label}</span></td></tr>;
+              })}
+            </tbody>
+          </table>
+          <div className="key">Key: Best answer gets full credit plus a speed bonus. Acceptable gets half. Revisit means a different channel would serve this situation better.</div>
+        </section>
+      )}
+
+      {report.lab1Insight && (
+        <section className="rep-sec">
+          <h3>What Lab 1 shows</h3>
+          <p className="line">{report.lab1Insight}</p>
+        </section>
+      )}
+
+      <div className="lab-band">Lab 2: Writing with Respect</div>
 
       <section className="rep-sec">
         <h3>Writing profile</h3>
@@ -399,11 +471,26 @@ function ReportView({ report, pdfUrl }) {
         <div className="key">Key: average of your two emails in each area. 1 is a development priority, 3 is adequate, 5 is strong.</div>
       </section>
 
-      <section className="rep-sec">
-        <h3>How you spotted and chose</h3>
-        {(report.lab1Lines || []).map((l, i) => <p key={i} className="line">{l}</p>)}
-        <div className="key">Key: what Lab 1 showed about the mistakes you notice and the channels you reach for.</div>
-      </section>
+      {emails.length > 0 && (
+        <section className="rep-sec">
+          <h3>Your two emails</h3>
+          {emails.map((e) => (
+            <div key={e.slot} className="em-card">
+              <div className="em-top">
+                <div><div className="rep-kicker">Email {e.slot + 1}</div><b>{e.scenarioTitle}</b></div>
+                <div className="em-total">{e.total}<span>/30</span></div>
+              </div>
+              <div className="chips">
+                {AREAS.map((a) => <div key={a.key} className="chip-s"><span>{a.short}</span><b>{e.scores[a.key]}</b></div>)}
+              </div>
+              <p className="line"><b>Worked well:</b> {e.strength}</p>
+              <p className="line"><b>To improve:</b> {e.fix}</p>
+              <p className="line"><b>Missing:</b> {(e.missing || []).length ? e.missing.join('; ') : 'nothing major'}</p>
+            </div>
+          ))}
+          <div className="key">Key: each email is scored on six areas from 1 to 5. Feedback refers to what you actually wrote.</div>
+        </section>
+      )}
 
       {report.improved && (
         <section className="rep-sec">
@@ -412,7 +499,7 @@ function ReportView({ report, pdfUrl }) {
             <div className="cmp">
               <div className="cmp-l">You wrote</div>
               <div className="cmp-s">{report.improved.original.subject || '(no subject)'}</div>
-              <div className="cmp-b">{report.improved.original.opening}</div>
+              <div className="cmp-b">{report.improved.original.body || report.improved.original.opening}</div>
             </div>
             <div className="cmp better">
               <div className="cmp-l">A stronger version</div>
@@ -420,32 +507,17 @@ function ReportView({ report, pdfUrl }) {
               <div className="cmp-b">{report.improved.polished.body}</div>
             </div>
           </div>
-          <div className="key">Key: your lower-scoring email next to a polished version with the same intent.</div>
+          <div className="key">Key: your lower-scoring email{report.improved.scenarioTitle ? ` (${report.improved.scenarioTitle})` : ''} next to a polished version with the same intent. Use it as a model, not a script.</div>
         </section>
       )}
-
-      <section className="rep-sec two">
-        <div>
-          <h3>Strengths</h3>
-          <ul className="bul">{(report.strengths || []).map((s, i) => <li key={i}>{s}</li>)}</ul>
-        </div>
-        <div>
-          <h3>Development areas</h3>
-          <ul className="bul">{(report.development || []).map((s, i) => <li key={i}>{s}</li>)}</ul>
-        </div>
-      </section>
-
-      <section className="rep-sec">
-        <h3>Next steps</h3>
-        <ol className="bul">{(report.nextSteps || []).map((s, i) => <li key={i}>{s}</li>)}</ol>
-      </section>
 
       {report.peer && (
         <section className="rep-sec peer">
           <h3>Peer note</h3>
           <p className="line"><b>What this email does well:</b> {report.peer.doesWell}</p>
           <p className="line"><b>One thing to fix:</b> {report.peer.oneFix}</p>
-          <div className="key">Key: feedback from the table that reviewed your email. This is peer feedback, separate from your scores.</div>
+          {report.peer.total != null && <p className="muted small">Table total {report.peer.total}/30{report.peer.aiTotal != null ? `, AI total ${report.peer.aiTotal}/30` : ''}</p>}
+          <div className="key">Key: feedback from the table that reviewed your email anonymously. It is kept separate from your scores.</div>
         </section>
       )}
 
@@ -655,7 +727,7 @@ function RoundAPlay({ data, step, emit, timeUp }) {
   return (
     <div className="stack">
       <div className="step-head">
-        <span className="kicker">Spot the Slip | Email {(step.index || 0) + 1} of {step.total || 1}</span>
+        <span className="kicker">Spot the Slip | Email {(step.index || 0) + 1} of {step.total || 1}{data.email.levelLabel ? ` | ${data.email.levelLabel}` : ''}</span>
         <h2>Tap every part of this email that has a mistake.</h2>
         <p className="muted small">Tap again to un-flag. Wrong flags cost points.</p>
       </div>
@@ -846,6 +918,7 @@ function GroupReview({ data, me, emit, timeUp }) {
   const [oneFix, setOneFix] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  if (!item && data.noEmail) return <Waiting icon={Users} title="No email for your table this round" text="Your facilitator will pair you with a neighbouring table for the discussion." />;
   if (!item) return <Waiting spin title="Waiting for your table's email" />;
 
   const complete = AREAS.every((a) => scores[a.key]) && doesWell.trim() && oneFix.trim();
@@ -991,6 +1064,7 @@ function ScreenBody({ step, data, session, code }) {
         <div className="split">
           <div className="split-main"><EmailView email={data.email} big /></div>
           <aside className="split-side">
+            {data.email && data.email.levelLabel && <div className="kicker light">Level {data.email.level}: {data.email.levelLabel}</div>}
             <h2 className="s-h2">Spot the Slip</h2>
             <p className="s-p">Tap every part of the email that has a mistake.</p>
             <Progress done={data.submitted} total={data.joined} label="submitted" />
@@ -1205,7 +1279,7 @@ function Login({ onToken }) {
 function SessionList({ token, onOpen, onLogout }) {
   const [list, setList] = useState(null);
   const [err, setErr] = useState('');
-  const [form, setForm] = useState({ client: 'Fatima Group', program: 'Campus to Corporate', date: new Date().toISOString().slice(0, 10), tableCount: 7, roundACount: 2 });
+  const [form, setForm] = useState({ client: 'Fatima Group', program: 'Campus to Corporate', date: new Date().toISOString().slice(0, 10), tableCount: 7, roundACount: 6 });
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(() => {
@@ -1239,7 +1313,7 @@ function SessionList({ token, onOpen, onLogout }) {
             <label>Date<input className="input" type="date" value={form.date} onChange={f('date')} required /></label>
             <div className="row gap">
               <label className="grow">Tables<input className="input" type="number" min={2} max={20} value={form.tableCount} onChange={f('tableCount')} /></label>
-              <label className="grow">Spot the Slip emails<input className="input" type="number" min={1} max={3} value={form.roundACount} onChange={f('roundACount')} /></label>
+              <label className="grow">Spot the Slip emails (1 to 6)<input className="input" type="number" min={1} max={6} value={form.roundACount} onChange={f('roundACount')} /></label>
             </div>
             {err && <div className="error">{err}</div>}
             <button className="btn accent block" disabled={busy}><Plus size={16} /> Create session</button>
@@ -1868,6 +1942,20 @@ button,input,select,textarea{font:inherit;color:inherit}
 .cmp-b{white-space:pre-wrap}
 .bul{margin:0;padding-left:18px;font-size:14px}.bul li{margin-bottom:4px}
 .rep-sec.peer{background:#FFF8EB;border-radius:10px;padding:10px}
+.lab-band{background:var(--ink);color:#fff;border-radius:8px;padding:8px 12px;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase}
+.lvl{padding:6px 0;border-bottom:1px dashed var(--line)}
+.lvl-top{display:flex;justify-content:space-between;gap:10px;font-size:13px}
+.lvl-track{height:7px;border-radius:4px;background:#EEF0F4;margin-top:5px;overflow:hidden}
+.lvl-fill{height:100%;background:var(--ink);border-radius:4px}
+.ch-table{width:100%;border-collapse:collapse;font-size:12.5px}
+.ch-table th{text-align:left;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;padding:4px 4px;border-bottom:1px solid var(--line)}
+.ch-table td{padding:6px 4px;border-bottom:1px solid var(--line);vertical-align:top}
+.em-card{border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px}
+.em-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:8px}
+.em-total{font-size:24px;font-weight:800;color:var(--ink)}.em-total span{font-size:13px;color:var(--muted);font-weight:600}
+.chips{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;margin-bottom:8px}
+.chip-s{background:#F4F5F8;border-radius:6px;padding:4px 2px;text-align:center;display:flex;flex-direction:column}
+.chip-s span{font-size:9.5px;color:var(--muted)}.chip-s b{font-size:14px;color:var(--ink)}
 .rep-foot{text-align:center;font-size:13px;color:var(--muted);border-top:1px solid var(--line);padding-top:10px}
 @media(max-width:420px){.compare,.rep-sec.two{grid-template-columns:1fr}}
 
